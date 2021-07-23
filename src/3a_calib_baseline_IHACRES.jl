@@ -32,7 +32,7 @@ mkpath(calib_fig_path)
     end
 
     calibrate!(sn, CALIB_CLIMATE, CALIB_FLOW;
-               metric=func, TraceInterval=300, MaxTime=60*60*4, PopulationSize=1000)
+               metric=func, TraceInterval=60*60*4, MaxTime=10, PopulationSize=1000)
 
     # Save calibrated network spec to file
     Streamfall.save_network_spec(sn, "$(baseline_path)cotter_baseline_IHACRES_$approach.yml")
@@ -72,4 +72,4 @@ mkpath(calib_fig_path)
     savefig(joinpath(calib_fig_path, "$(approach)_validation.png"))
 end
 
-map(run_calibration, zip(APPROACHES, OBJFUNCS))
+pmap(run_calibration, zip(APPROACHES, OBJFUNCS))

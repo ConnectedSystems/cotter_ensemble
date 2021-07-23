@@ -69,10 +69,13 @@ split_NNSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Stream
 split_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NmKGE)
 split_RMSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.RMSE)
 split_mean_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.mean_NmKGE)
+split_NnpKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NnpKGE)
 
 OBJFUNCS = [
     Streamfall.NNSE, Streamfall.NmKGE, Streamfall.RMSE, Streamfall.mean_NmKGE,
-    split_NNSE, split_NmKGE, split_RMSE, split_mean_NmKGE
+    Streamfall.NnpKGE,
+    split_NNSE, split_NmKGE, split_RMSE, split_mean_NmKGE,
+    split_NnpKGE
 ]
 
 

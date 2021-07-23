@@ -2,7 +2,7 @@ include("_common.jl")
 
 
 if nworkers() < 2
-    addprocs(CPU_CORES, exeflags="--project=..")
+    addprocs(min(length(APPROACHES), CPU_CORES), exeflags="--project=..")
 end
 
 

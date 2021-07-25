@@ -18,6 +18,9 @@ mkpath(calib_param_path)
 @everywhere function run_state_calibration(metric)
     approach, objfunc = metric
 
+    wid = Distributed.myid()
+    @info "Worker $wid : Calibrating $approach"
+
     calib_start = 1826  # 5-year burn in
     sn, n_id = setup_network("$(DATA_PATH)410730_IHACRES.yml")
     func = nothing

@@ -17,6 +17,9 @@ mkpath(calib_fig_path)
 @everywhere function run_calibration(metric)
     approach, objfunc = metric
 
+    wid = Distributed.myid()
+    @info "Worker $wid : Calibrating $approach"
+
     sn, n_id = setup_network("410730_IHACRES.yml")
     node = sn[n_id]
 
@@ -31,11 +34,12 @@ mkpath(calib_fig_path)
         func = (obs, sim) -> objfunc(obs[calib_start:end], sim[calib_start:end])
     end
 
-    calibrate!(sn, CALIB_CLIMATE, CALIB_FLOW;
-               metric=func, TraceInterval=300, MaxTime=60*60*4, PopulationSize=1000)
+    calibrate!(sn, CALIB_CLIMATE, CALIB_FLOW; metric=func,
+               TraceInterval=300, MaxTime=60*60*6, PopulationSize=1000)
 
     # Save calibrated network spec to file
-    Streamfall.save_network_spec(sn, "$(baseline_path)cotter_baseline_IHACRES_$approach.yml")
+    spec_fn = "$(baseline_path)cotter_baseline_IHACRES_$(approach).yml"
+    Streamfall.save_network_spec(sn, spec_fn)
 
     reset!(node)
 
@@ -72,4 +76,4 @@ mkpath(calib_fig_path)
     savefig(joinpath(calib_fig_path, "$(approach)_validation.png"))
 end
 
-map(run_calibration, zip(APPROACHES, OBJFUNCS))
+pmap(run_calibration, zip(APPROACHES, OBJFUNCS))

@@ -32,7 +32,7 @@ mkpath(calib_param_path)
 
     # parameter 3 is `e` which we ignore as we're using PET data.
     target_idx = (1,2,4,5,6,7,8)
-    thresholds = [0.0, 0.4, 0.8, 1.0]
+    thresholds = [0.0, 0.1, 0.9, 1.0]
     popsize = 64 * length(target_idx)^2
 
     # Calibrate network using the BlackBoxOptim package
@@ -46,7 +46,7 @@ mkpath(calib_param_path)
     # Save params
     params = best_candidate(result)
     state_str = String(:gw_store)
-    outfile = "$(calib_param_path)calib_params_online_$(state_str)_$approach.txt"
+    outfile = "$(calib_param_path)calib_params_online_edge_$(state_str)_$approach.txt"
     open(outfile, "w") do f
         print(f, join(params, ","))
     end
@@ -72,7 +72,7 @@ mkpath(calib_param_path)
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(CALIB_DATES[calib_start:end], calib_sim, label="Calibration", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "$(state_str)_$(approach)_calibration.png"))
+    savefig(joinpath(calib_fig_path, "$(state_str)_$(approach)_edge_calibration.png"))
 
     valid_data = FULL_DATASET[CALIB_LN+1:end, "410730_Q"]
     valid_sim = sim_flow[CALIB_LN+1:end]
@@ -86,7 +86,7 @@ mkpath(calib_param_path)
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(VALID_DATES, valid_sim, label="Validation", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "$(state_str)_$(approach)_validation.png"))
+    savefig(joinpath(calib_fig_path, "$(state_str)_$(approach)_edge_validation.png"))
 end
 
 # reset!(sn)

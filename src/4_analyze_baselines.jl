@@ -8,19 +8,10 @@ outflows = Dict()
 climate = FULL_CLIMATE
 calib_obs = CALIB_OBS[calib_start:end]
 
-# # Save climate data plots
-# P, PET = climate.climate_data[:, "410730_P"], climate.climate_data[:, "410730_PET"]
-# bin_state_bound = quantile(P[1:CALIB_LN], [0.95, 1.0])
-# plot(CALIB_DATES[calib_start:end], P[calib_start:CALIB_LN], label="Rainfall")
-# hline!(bin_state_bound; color="orange", linewidth=1.5, label="State bounds")
-# savefig(joinpath(FIG_PATH, "cotter_rainfall.png"))
-
-# plot(CALIB_DATES[calib_start:end], PET[calib_start:CALIB_LN], label="PET")
-# savefig(joinpath(FIG_PATH, "cotter_temperature.png"))
-
+baseline_path = joinpath(FIG_PATH, "calib_baseline")
 
 for app in APPROACHES
-    sn, n_id = setup_network(joinpath(DATA_PATH, "cotter_baseline_IHACRES_$(app).yml"))
+    sn, n_id = setup_network(joinpath("baselines", "cotter_baseline_IHACRES_$(app).yml"))
     node = sn[n_id]
     run_basin!(sn, climate)
 
@@ -33,18 +24,12 @@ for app in APPROACHES
     d_max = maximum(gw_store)
     trunc_dist = truncated(Normal(d_mean, d_std), 0.0, d_max)
 
-    # save to file
-    append!(dist_data["model"], ["Baseline_$(app)"])
-    append!(dist_data["mean"], d_mean)
-    append!(dist_data["std"], d_std)
-    append!(dist_data["max"], d_max)
-
     log_gw_store = log.(gw_store)
     μ = mean(log_gw_store)
     σ = std(log_gw_store)
     d_max = maximum(log_gw_store)
     trunc_dist = Normal(μ, σ)
-    quantiles = [0.4, 0.8, 1.0]
+    quantiles = [0.1, 0.99, 1.0]
     window = 365*5
     thresholds = quantile!(log_gw_store, quantiles)
 
@@ -60,7 +45,7 @@ for app in APPROACHES
         annotate!(thres, 0.0015, text("q$annot", 8))
     end
 
-    savefig(joinpath(FIG_PATH, "baseline_gw_store_dist_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_gw_store_dist_$(app).png"))
 
 
     # Save performance over calibration period
@@ -75,7 +60,12 @@ for app in APPROACHES
 
     plot(CALIB_DATES[calib_start:end], calib_obs, label="Historic", title="$app Calibration\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
     plot!(CALIB_DATES[calib_start:end], calib_outflow, label="Simulated", alpha=0.7, ylabel="Stream flow [ML]")
-    savefig(joinpath(FIG_PATH, "baseline_calib_perf_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_calib_perf_$(app).png"))
+
+    qqplot(calib_obs, calib_outflow, title="Calibration Period\n$app")
+    xlabel!("Historic")
+    ylabel!("Simulated")
+    savefig(joinpath(baseline_path, "baseline_calib_perf_qq_$(app).png"))
 
     # movingaverage(g, n) = [i < n ? mean(g[begin:i]) : mean(g[i-n+1:i]) for i in 1:length(g)]
 
@@ -89,7 +79,7 @@ for app in APPROACHES
     plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
     plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
     plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(FIG_PATH, "baseline_calib_cmd_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_calib_cmd_$(app).png"))
 
     logcmd = log.(cmd)
     replace!(logcmd, -Inf=>0.0, Inf=>0.0)
@@ -102,7 +92,7 @@ for app in APPROACHES
     plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
     plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
     plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(FIG_PATH, "baseline_calib_logcmd_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_calib_logcmd_$(app).png"))
 
     gw_store_ts = gw_store
 
@@ -115,7 +105,7 @@ for app in APPROACHES
     plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
     plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
     plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(FIG_PATH, "baseline_calib_loggw_store_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_calib_loggw_store_$(app).png"))
 
     @info "CMD" app minimum(node.storage[2:end]) maximum(node.storage[2:end])
     @info "GW Store" app minimum(node.gw_store[2:end]) maximum(node.gw_store[2:end])
@@ -138,18 +128,19 @@ for app in APPROACHES
 
     plot(VALID_DATES, VALID_OBS, label="Historic", title="$app Validation\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
     plot!(VALID_DATES, valid_outflow, label="Simulated", alpha=0.7, ylabel="Stream flow [ML]")
-    savefig(joinpath(FIG_PATH, "baseline_valid_perf_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_valid_perf_$(app).png"))
+
+    qqplot(VALID_OBS, valid_outflow, title="Validation Period\n$app")
+    xlabel!("Historic")
+    ylabel!("Simulated")
+    savefig(joinpath(baseline_path, "baseline_valid_perf_qq_$(app).png"))
 
     full_dates = vcat(CALIB_DATES, VALID_DATES)
     plot(full_dates[calib_start:CALIB_LN], CALIB_OBS[calib_start:end], label="Calibration", title="$app C&V", legend=:topright)
     plot!(full_dates[CALIB_LN+1:end], VALID_OBS, label="Validation", color="green")
     plot!(full_dates[calib_start:end], node.outflow[calib_start:end], label="Simulated", linestyle=:dashdot, color="red", alpha=0.7, ylabel="Stream flow [ML]")
-    savefig(joinpath(FIG_PATH, "baseline_full_perf_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_full_perf_$(app).png"))
 end
-
-
-# Save distribution data
-CSV.write(joinpath(DATA_PATH, "dist_data.csv"), DataFrame(dist_data))
 
 
 # Ensemble results

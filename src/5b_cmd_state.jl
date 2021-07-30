@@ -17,6 +17,7 @@ mkpath(calib_param_path)
 
 @everywhere function run_state_calibration(metric)
     approach, objfunc = metric
+    state = :storage
 
     wid = Distributed.myid()
     @info "Worker $wid : Calibrating $approach"
@@ -39,13 +40,13 @@ mkpath(calib_param_path)
     # keyword arguments will be passed to the `bboptimize()` function
     # This will set node parameters to the optimal values found
     metric = (active_param_set, param_idxs, obs, sim) -> func(obs, sim)
-    result, optobj = state_based_calibrate(sn, n_id, :gw_store, CALIB_CLIMATE, CALIB_FLOW, metric,
+    result, optobj = state_based_calibrate(sn, n_id, state, CALIB_CLIMATE, CALIB_FLOW, metric,
                                            target_idx, thresholds;
                                            PopulationSize=popsize, MaxTime=TRAINING_TIME, TraceInterval=300)
 
     # Save params
     params = best_candidate(result)
-    state_str = String(:gw_store)
+    state_str = String(state)
     outfile = "$(calib_param_path)calib_params_online_$(state_str)_$approach.txt"
     open(outfile, "w") do f
         print(f, join(params, ","))
@@ -56,7 +57,7 @@ mkpath(calib_param_path)
     node = sn[n_id]
     _, x0, __ = param_info(node; with_level=false)
     mod_params = update_partial(x0, target_idx, params)
-    active_param_set, param_idxs = online_state_node!(sn, n_id, FULL_CLIMATE, :gw_store, mod_params, thresholds; releases=nothing)
+    active_param_set, param_idxs = online_state_node!(sn, n_id, FULL_CLIMATE, state, mod_params, thresholds; releases=nothing)
 
     sim_flow = node.outflow
 

@@ -23,6 +23,17 @@ half_decade_dataset = groupby(dataset, :half_decade_set)
 annual_dataset = groupby(dataset, :annual)
 
 
+# Plot historic rainfall
+thresholds = quantile(FULL_DATASET[:, "410730_P"], [0.6, 0.95])
+bar(FULL_DATASET.Date, FULL_DATASET[:, "410730_P"],
+	title="Observed Rainfall",
+	label="",
+	xlabel="Year",
+	ylabel="Rainfall [mm]")
+hline!(thresholds, label="Bin thresholds")
+savefig("$(climate_fig_path)rainfall_record.png")
+
+
 rain_sym = Symbol("410730_P")
 temp_sym = Symbol("410730_max_T")
 flow_sym = Symbol("410730_Q")

@@ -444,7 +444,7 @@ function bin_metric(active_param_set, param_idxs, obs, sim, metric, agg_func)
         out_set = findall(active_param_set .== param_set)
         obs_set = obs[out_set]
         sim_set = sim[out_set]
-        if length(sim) > 0 && (length(obs) == length(sim))
+        if length(sim_set) > 0 && (length(obs_set) == length(sim_set))
             tmp = metric(obs_set, sim_set)
             if isnan(tmp)
                 push!(sub_scores, 9999.9)

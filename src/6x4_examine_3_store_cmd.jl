@@ -27,11 +27,19 @@ state_str = String(state)
 # state_approach = "NNSE"
 # state_approach = "RMSE"
 # state_approach = "split_NnpKGE"
+# state_approach = "split_RMSE"
 # state_approach = "split_NmKGE"
 # state_approach = "NmKGE"
 # state_approach = "split_NNSE"
 state_approach = "split_mean_NmKGE"
-target_idx = [5,6,7,8]
+
+baseline_approach = "split_NnpKGE"
+# baseline_approach = "split_NNSE"
+# baseline_approach = "split_NmKGE"
+# baseline_approach = "split_mean_NmKGE"
+# baseline_approach = "NmKGE"
+
+target_idx = [1,2,5,6,7,8]
 
 baseline_calib = joinpath(DATA_PATH, "baselines") * "/"
 calib_param_path = joinpath(DATA_PATH, "calib_params") * "/"
@@ -40,19 +48,16 @@ sn, n_id = setup_network("baselines/cotter_baseline_IHACRES_$state_approach.yml"
 node = sn[n_id]
 
 # Read in parameters
-fn = "$(calib_param_path)restricted_log_$(state_str)_$(state_approach).txt"
+fn = "$(calib_param_path)restricted_log_$(state_str)_$(state_approach)_10_year.txt"
 calibrated_params = read_params(fn)
 
 reset!(sn)
-calib_ts = 1826
+calib_ts = 3651 # 1826
 _, x0, __ = param_info(node; with_level=false)
 mod_params = update_partial(x0, target_idx, calibrated_params)
 quantiles = [0.0, 0.1, 0.90]
-active_param_set, param_idxs = online_burn_state_node!(sn, n_id, FULL_CLIMATE, state, mod_params, quantiles; log_transform=true, releases=nothing)
+active_param_set, param_idxs = online_burn_state_node!(sn, n_id, FULL_CLIMATE, state, mod_params, quantiles; burn_in=calib_ts, log_transform=true, releases=nothing)
 
-
-baseline_approach = "split_NnpKGE"
-# baseline_approach = "split_NNSE"
 base_sn, base_id = setup_network("baselines/cotter_baseline_IHACRES_$(baseline_approach).yml")
 base_node = base_sn[base_id]
 Streamfall.run_basin!(base_sn, FULL_CLIMATE)
@@ -67,17 +72,19 @@ low_store = findall(active_param_set[calib_ts:CALIB_LN] .== 1)
 mid_store = findall(active_param_set[calib_ts:CALIB_LN] .== 2)
 high_store = findall(active_param_set[calib_ts:CALIB_LN] .== 3)
 
+@assert length(mid_store) > 0
+
 high_base = Streamfall.NmKGE(obs_flow[high_store], base_flow[high_store])
 high_state = Streamfall.NmKGE(obs_flow[high_store], sim_flow[high_store])
 high_factor = high_state >= (high_base * 1.0) ? 0.99 : 0.01
 
 mid_base = Streamfall.NmKGE(obs_flow[mid_store], base_flow[mid_store])
 mid_state = Streamfall.NmKGE(obs_flow[mid_store], sim_flow[mid_store])
-mid_factor = mid_state >= (mid_base * 1.0) ? 0.99 : 0.05
+mid_factor = mid_state >= (mid_base * 1.0) ? 0.8 : 0.2
 
 low_base = Streamfall.NmKGE(obs_flow[low_store], base_flow[low_store])
 low_state = Streamfall.NmKGE(obs_flow[low_store], sim_flow[low_store])
-low_factor = low_state >= (low_base * 1.0) ? 0.99 : 0.01
+low_factor = low_state >= (low_base * 1.0) ? 1.0 : 0.0
 
 # ensemble_flow[high_store] = ((ensemble_flow[high_store] .* high_factor) .+ (sim_flow[high_store] .* (1.0 - high_factor)))
 # ensemble_flow[mid_store] = ((ensemble_flow[mid_store] .* mid_factor) .+ (sim_flow[mid_store] .* (1.0 - mid_factor)))
@@ -106,7 +113,7 @@ report_metrics(obs_flow[low_store], ensemble_flow[low_store])
 
 
 # sanity_check
-@info "Sanity Check [high/low]" Streamfall.RMSE(obs_flow[high_store], sim_flow[high_store]) Streamfall.RMSE(obs_flow[mid_store], sim_flow[mid_store])
+@info "Sanity Check [high/low]" Streamfall.RMSE(obs_flow[high_store], sim_flow[high_store]) Streamfall.RMSE(obs_flow[mid_store], sim_flow[mid_store]) Streamfall.RMSE(obs_flow[low_store], sim_flow[low_store])
 @info "Bin Metric results" bin_metric(active_param_set[calib_ts:CALIB_LN], param_idxs, obs_flow, sim_flow, split_NNSE, nothing)
 
 
@@ -122,7 +129,7 @@ ensemble_plot = begin
     plot!(plot_dates, ensemble_flow, alpha=0.8, linestyle=:dashdot)
     plot!(size=(600,200), dpi=300)
 end
-savefig(plot(baseline_plot, ensemble_plot), "$(ensemble_figs)flow_cmd_$(baseline_approach)_$(state_approach).png")
+savefig(plot(baseline_plot, ensemble_plot), "$(ensemble_figs)flow_cmd_$(baseline_approach)_$(state_approach)_calib.png")
 
 base_store = base_node.gw_store[calib_ts:CALIB_LN+1]
 pos_markers = quantile(base_store, quantiles[2:end])
@@ -136,7 +143,7 @@ high = round(Streamfall.mKGE(obs_flow[high_store], base_flow[high_store]), digit
 mid = round(Streamfall.mKGE(obs_flow[mid_store], base_flow[mid_store]), digits=3)
 low = round(Streamfall.mKGE(obs_flow[low_store], base_flow[low_store]), digits=3)
 base_qq = qqplot(obs_flow, base_flow,
-                 title="Baseline $(baseline_approach)\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                 title="Baseline $(baseline_approach)\n(KGE': $score; Wet: $low Mid: $mid; Dry: $high)",
                  titlefontsize=8,
                  markerstrokewidth=0,
                  markersize=2,
@@ -148,7 +155,7 @@ high = round(Streamfall.mKGE(obs_flow[high_store], sim_flow[high_store]), digits
 mid = round(Streamfall.mKGE(obs_flow[mid_store], sim_flow[mid_store]), digits=3)
 low = round(Streamfall.mKGE(obs_flow[low_store], sim_flow[low_store]), digits=3)
 sim_qq = qqplot(obs_flow, sim_flow,
-                title="State-based $state_approach\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                title="State-based $state_approach\n(KGE': $score; Wet: $low; Mid: $mid; Dry: $high)",
                 titlefontsize=8,
                 markerstrokewidth=0,
                 markersize=2,
@@ -163,15 +170,16 @@ sim_qq_col = begin
     #     qqplot(obs_flow[high_store], ensemble_flow[high_store], title="Dry Ensemble\n(KGE': $(high))", titlefontsize=8, markersize=2.0),
     #     dpi=300
     # )
-    high_plot = begin
-        scatter(obs_flow[high_store], ensemble_flow[high_store],
-                title="State-based Dry\n(KGE': $(high))",
+
+    low_plot = begin
+        scatter(obs_flow[low_store], ensemble_flow[low_store],
+                title="State-based Wet\n(KGE': $(low))",
                 titlefontsize=8,
                 markerstrokewidth=0,
                 markersize=2.0,
                 alpha=0.5,
                 legend=false)
-        plot!(obs_flow[high_store], obs_flow[high_store], label=false, color="green", alpha=0.8)  # 1:1 line
+        plot!(obs_flow[low_store], obs_flow[low_store], label=false, color="green", alpha=0.8)  # 1:1 line
     end
 
     mid_plot = begin
@@ -185,27 +193,27 @@ sim_qq_col = begin
         plot!(obs_flow[mid_store], obs_flow[mid_store], label=false, color="green", alpha=0.8)  # 1:1 line
     end
 
-    low_plot = begin
-        scatter(obs_flow[low_store], ensemble_flow[low_store],
-                title="State-based Wet\n(KGE': $(low))",
+    high_plot = begin
+        scatter(obs_flow[high_store], ensemble_flow[high_store],
+                title="State-based Dry\n(KGE': $(high))",
                 titlefontsize=8,
                 markerstrokewidth=0,
                 markersize=2.0,
                 alpha=0.5,
                 legend=false)
-        plot!(obs_flow[low_store], obs_flow[low_store], label=false, color="green", alpha=0.8)  # 1:1 line
+        plot!(obs_flow[high_store], obs_flow[high_store], label=false, color="green", alpha=0.8)  # 1:1 line
     end
 
     plot(
         sim_qq,
-        high_plot,
-        mid_plot,
         low_plot,
+        mid_plot,
+        high_plot,
         dpi=300
     )
 end
 
-savefig(sim_qq_col, "$(ensemble_figs)sim_cmd_$(baseline_approach)_$(state_approach)_qq.png")
+savefig(sim_qq_col, "$(ensemble_figs)sim_cmd_$(baseline_approach)_$(state_approach)_qq_calib.png")
 
 
 score = round(Streamfall.mKGE(obs_flow, ensemble_flow), digits=3)
@@ -214,7 +222,7 @@ mid = round(Streamfall.mKGE(obs_flow[mid_store], ensemble_flow[mid_store]), digi
 low = round(Streamfall.mKGE(obs_flow[low_store], ensemble_flow[low_store]), digits=3)
 
 ensemble_qq = qqplot(obs_flow, ensemble_flow,
-                     title="$(baseline_approach) - $(state_approach)\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                     title="$(baseline_approach) - $(state_approach)\n(KGE': $score; Wet: $low; Mid: $mid; Dry: $high)",
                      titlefontsize=8,
                      markerstrokewidth=0,
                      alpha=0.5,
@@ -269,7 +277,7 @@ ensemble_col = begin
         dpi=300
     )
 end
-savefig(ensemble_col, "$(ensemble_figs)ensemble_cmd_$(baseline_approach)_$(state_approach)_qq.png")
+savefig(ensemble_col, "$(ensemble_figs)ensemble_cmd_$(baseline_approach)_$(state_approach)_qq_calib.png")
 
 
 snapshot = begin
@@ -283,7 +291,7 @@ snapshot = begin
     plot!(size=(600,400))
 end
 
-savefig(snapshot, "$(ensemble_figs)ensemble_cmd_$(baseline_approach)_$(state_approach)_result.png")
+savefig(snapshot, "$(ensemble_figs)ensemble_cmd_$(baseline_approach)_$(state_approach)_result_calib.png")
 
 
 
@@ -362,14 +370,14 @@ baseline_qq = begin
     # )
     plot(
         overall,
-        high_plot,
-        mid_plot,
         low_plot,
+        mid_plot,
+        high_plot,
         dpi=300
     )
     plot!(size=(600,400))
 end
-savefig(baseline_qq, joinpath(ensemble_figs, "baseline_cmd_$(baseline_approach)_$(state_approach)_qq.png"))
+savefig(baseline_qq, joinpath(ensemble_figs, "baseline_cmd_$(baseline_approach)_$(state_approach)_qq_calib.png"))
 
 
 
@@ -385,6 +393,8 @@ low_store = findall(active_param_set[CALIB_LN+1:end] .== 1)
 mid_store = findall(active_param_set[CALIB_LN+1:end] .== 2)
 high_store = findall(active_param_set[CALIB_LN+1:end] .== 3)
 
+@assert length(mid_store) > 0
+
 ensemble_flow[high_store] = ((sim_flow[high_store] .* high_factor) .+ (ensemble_flow[high_store] .* (1.0 - high_factor)))
 ensemble_flow[mid_store] = ((sim_flow[mid_store] .* mid_factor) .+ (ensemble_flow[mid_store] .* (1.0 - mid_factor)))
 
@@ -395,7 +405,9 @@ end
 # sanity_check
 # @info "Sanity Check [high/low]" Streamfall.RMSE(obs_flow[high_store], sim_flow[high_store]) Streamfall.RMSE(obs_flow[mid_store], sim_flow[mid_store])
 # @info "Bin Metric results" bin_metric(active_param_set[calib_ts:CALIB_LN], param_idxs, obs_flow, sim_flow, split_NNSE, nothing)
-
+# sanity_check
+@info "Sanity Check [high/low]" Streamfall.RMSE(obs_flow[high_store], sim_flow[high_store]) Streamfall.RMSE(obs_flow[mid_store], sim_flow[mid_store]) Streamfall.RMSE(obs_flow[low_store], sim_flow[low_store])
+@info "Bin Metric results" bin_metric(active_param_set[CALIB_LN+1:end], param_idxs, obs_flow, sim_flow, split_NNSE, nothing)
 
 plot_dates = FULL_DATASET.Date[CALIB_LN+1:end]
 baseline_plot = begin
@@ -421,7 +433,13 @@ base_high_store = findall(base_store .>= pos_markers[2])
 score = round(Streamfall.mKGE(obs_flow, base_flow), digits=3)
 
 high = round(Streamfall.mKGE(obs_flow[high_store], base_flow[high_store]), digits=3)
-mid = round(Streamfall.mKGE(obs_flow[mid_store], base_flow[mid_store]), digits=3)
+
+if length(mid_store) > 0
+    mid = round(Streamfall.mKGE(obs_flow[mid_store], base_flow[mid_store]), digits=3)
+else
+    mid = NaN
+end
+
 
 if length(low_store) > 0
     low = round(Streamfall.mKGE(obs_flow[low_store], base_flow[low_store]), digits=3)    
@@ -430,7 +448,7 @@ else
 end
 
 base_qq = qqplot(obs_flow, base_flow,
-                 title="Baseline $(baseline_approach)\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                 title="Baseline $(baseline_approach)\n(KGE': $score; Wet: $low; Mid: $mid; Dry: $high)",
                  titlefontsize=8,
                  markerstrokewidth=0,
                  markersize=2,
@@ -440,7 +458,13 @@ base_qq = qqplot(obs_flow, base_flow,
 score = round(Streamfall.mKGE(obs_flow, sim_flow), digits=3)
 
 high = round(Streamfall.mKGE(obs_flow[high_store], sim_flow[high_store]), digits=3)
-mid = round(Streamfall.mKGE(obs_flow[mid_store], sim_flow[mid_store]), digits=3)
+
+if length(mid_store) > 0
+    mid = round(Streamfall.mKGE(obs_flow[mid_store], sim_flow[mid_store]), digits=3)
+else
+    mid = NaN
+end
+
 
 if length(low_store) > 0
     low = round(Streamfall.mKGE(obs_flow[low_store], sim_flow[low_store]), digits=3)
@@ -449,7 +473,7 @@ else
 end
 
 sim_qq = qqplot(obs_flow, sim_flow,
-                title="State-based $state_approach\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                title="State-based $state_approach\n(KGE': $score; Wet: $low; Mid: $mid; Dry: $high)",
                 titlefontsize=8,
                 markerstrokewidth=0,
                 markersize=2,
@@ -499,9 +523,9 @@ sim_qq_col = begin
 
     plot(
         sim_qq,
-        high_plot,
-        mid_plot,
         low_plot,
+        mid_plot,
+        high_plot,
         dpi=300
     )
 end
@@ -512,7 +536,12 @@ savefig(sim_qq_col, "$(ensemble_figs)sim_cmd_$(baseline_approach)_$(state_approa
 score = round(Streamfall.mKGE(obs_flow, ensemble_flow), digits=3)
 
 high = round(Streamfall.mKGE(obs_flow[high_store], ensemble_flow[high_store]), digits=3)
-mid = round(Streamfall.mKGE(obs_flow[mid_store], ensemble_flow[mid_store]), digits=3)
+
+if length(mid_store) > 0
+    mid = round(Streamfall.mKGE(obs_flow[mid_store], ensemble_flow[mid_store]), digits=3)
+else
+    mid = NaN
+end
 
 if length(low_store) > 0
     low = round(Streamfall.mKGE(obs_flow[low_store], ensemble_flow[low_store]), digits=3)
@@ -521,7 +550,7 @@ else
 end
 
 ensemble_qq = qqplot(obs_flow, ensemble_flow,
-                     title="$(baseline_approach) - $(state_approach)\n(KGE': $score; Dry: $high; Mid: $mid; Wet: $low)",
+                     title="$(baseline_approach) - $(state_approach)\n(KGE': $score; Wet: $low; Mid: $mid; Dry: $high)",
                      titlefontsize=8,
                      markerstrokewidth=0,
                      alpha=0.5,
@@ -678,9 +707,9 @@ baseline_qq = begin
     # )
     plot(
         overall,
-        high_plot,
-        mid_plot,
         low_plot,
+        mid_plot,
+        high_plot,
         dpi=300
     )
     plot!(size=(600,400))

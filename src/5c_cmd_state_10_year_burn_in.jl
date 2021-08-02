@@ -33,7 +33,7 @@ mkpath(calib_param_path)
 
     # Use baseline calibration parameters as the base
     target_idx = (1,2,5,6,7,8)
-    thresholds = [0.0, 0.2, 0.90]
+    thresholds = [0.0, 0.1, 0.90]
     popsize = 64 * length(target_idx)^2
     state = :storage
     state_str = String(state)

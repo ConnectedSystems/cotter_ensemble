@@ -6,46 +6,46 @@ using StatsPlots, OnlineStats
 calib_start = 1826  # 1826
 outflows = Dict()
 climate = FULL_CLIMATE
-calib_obs = CALIB_OBS[calib_start:end]
+calib_obs = CALIB_OBS[calib_start+1:end]
 
 baseline_path = joinpath(FIG_PATH, "calib_baseline")
 
 for app in APPROACHES
+    display_name = replace(app, "_"=>" ")
     sn, n_id = setup_network(joinpath("baselines", "cotter_baseline_IHACRES_$(app).yml"))
     node = sn[n_id]
     run_basin!(sn, climate)
 
-    calib_outflow = node.outflow[calib_start:CALIB_LN]
-    gw_store = node.gw_store[2:CALIB_LN+1]
+    calib_outflow = node.outflow[calib_start+1:CALIB_LN]
+    gw_store = node.gw_store[calib_start+1:CALIB_LN]
 
-    normal_dist = fit(Normal, gw_store)
-    d_mean = mean(normal_dist)
-    d_std = std(normal_dist)
-    d_max = maximum(gw_store)
-    trunc_dist = truncated(Normal(d_mean, d_std), 0.0, d_max)
+    cmd = node.storage[calib_start+1:CALIB_LN]
+    log_cmd = log.(cmd)
+    max_cmd = maximum(log_cmd)
+    quantiles = [0.2, 0.80]
 
-    log_gw_store = log.(gw_store)
-    μ = mean(log_gw_store)
-    σ = std(log_gw_store)
-    d_max = maximum(log_gw_store)
-    trunc_dist = Normal(μ, σ)
-    quantiles = [0.1, 0.99, 1.0]
-    window = 365*5
-    thresholds = quantile!(log_gw_store, quantiles)
-
-    histogram(log_gw_store, alpha=0.4, normalize=true,
-            title="Distribution of GW Store values\n($(app) calibrated baseline)",
-            legend=:topright,
-            label="GW Store",
-            xlabel="GW Store",
-            ylabel="Density")
+    normal_dist = fit(Normal, log_cmd)
+    μ = mean(normal_dist)
+    σ = std(normal_dist)
+    d_min = minimum(log_cmd)
+    d_max = maximum(log_cmd)
+    trunc_dist = truncated(Normal(μ, σ), d_min, d_max)
+    
+    thresholds = quantile(log_cmd, quantiles)
+    @info "Log CMD thresholds: [0.1, 0.9 / min / max]" thresholds d_min d_max
+    histogram(log_cmd, alpha=0.4, normalize=true,
+              title="Distribution of Log CMD values\n($(display_name) calibrated baseline)",
+              legend=:topleft,
+              label=false,
+              xlabel="Log CMD",
+              ylabel="Density")
     StatsPlots.plot!(trunc_dist, linewidth=2, label="Fitted normal distribution")
     vline!(thresholds; color="orange", linewidth=1.5, label="State thresholds")
     for (thres, annot) in zip(thresholds, quantiles)
         annotate!(thres, 0.0015, text("q$annot", 8))
     end
 
-    savefig(joinpath(baseline_path, "baseline_gw_store_dist_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_cmd_dist_$(app).png"))
 
 
     # Save performance over calibration period
@@ -58,54 +58,51 @@ for app in APPROACHES
     @info "$app calibration: "
     report_metrics(calib_obs, calib_outflow)
 
-    plot(CALIB_DATES[calib_start:end], calib_obs, label="Historic", title="$app Calibration\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
-    plot!(CALIB_DATES[calib_start:end], calib_outflow, label="Simulated", alpha=0.7, ylabel="Stream flow [ML]")
+    plot(CALIB_DATES[calib_start+1:end], calib_obs, label="Historic", title="$app Calibration\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
+    plot!(CALIB_DATES[calib_start+1:end], calib_outflow, label="Simulated", alpha=0.7, ylabel="Stream flow [ML]")
     savefig(joinpath(baseline_path, "baseline_calib_perf_$(app).png"))
 
-    qqplot(calib_obs, calib_outflow, title="Calibration Period\n$app")
+    qqplot(calib_obs, calib_outflow, title="Calibration Period\n$display_name")
     xlabel!("Historic")
     ylabel!("Simulated")
-    savefig(joinpath(baseline_path, "baseline_calib_perf_qq_$(app).png"))
+    savefig(joinpath(baseline_path, "baseline_calib_perf_qq_$(display_name).png"))
 
-    # movingaverage(g, n) = [i < n ? mean(g[begin:i]) : mean(g[i-n+1:i]) for i in 1:length(g)]
+    # cmd = node.storage[2:CALIB_LN+1]
+    # mw = MovingWindow(window, Float64)
+    # o = Quantile(quantiles, b=1000)
+    # ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in cmd]
+    # thresholds = [value(fit!(o, i)) for i in ma]
+    # plot(CALIB_DATES, cmd, label="CMD", title="$app CMD", legend=:topright)
+    # plot!(CALIB_DATES, ma, label="MA Simulated", alpha=0.7, ylabel="CMD")
+    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
+    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # savefig(joinpath(baseline_path, "baseline_calib_cmd_$(app).png"))
 
-    cmd = node.storage[2:CALIB_LN+1]
-    mw = MovingWindow(window, Float64)
-    o = Quantile(quantiles, b=1000)
-    ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in cmd]
-    thresholds = [value(fit!(o, i)) for i in ma]
-    plot(CALIB_DATES, cmd, label="CMD", title="$app CMD", legend=:topright)
-    plot!(CALIB_DATES, ma, label="MA Simulated", alpha=0.7, ylabel="CMD")
-    plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(baseline_path, "baseline_calib_cmd_$(app).png"))
+    # logcmd = log.(cmd)
+    # replace!(logcmd, -Inf=>0.0, Inf=>0.0)
+    # o = Quantile(quantiles, b=1000)
+    # ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in logcmd]
+    # thresholds = [value(fit!(o, i)) for i in ma]
+    # plot(CALIB_DATES, logcmd, label="Log CMD", title="$app Log CMD", legend=:topright)
+    # plot!(CALIB_DATES, ma, label="MA Log CMD", legend=:topright)
+    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
+    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # savefig(joinpath(baseline_path, "baseline_calib_logcmd_$(app).png"))
 
-    logcmd = log.(cmd)
-    replace!(logcmd, -Inf=>0.0, Inf=>0.0)
-    mw = MovingWindow(window, Float64)
-    o = Quantile(quantiles, b=1000)
-    ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in logcmd]
-    thresholds = [value(fit!(o, i)) for i in ma]
-    plot(CALIB_DATES, logcmd, label="Log CMD", title="$app Log CMD", legend=:topright)
-    plot!(CALIB_DATES, ma, label="MA Log CMD", legend=:topright)
-    plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(baseline_path, "baseline_calib_logcmd_$(app).png"))
+    # gw_store_ts = gw_store
 
-    gw_store_ts = gw_store
-
-    log_gw = log.(gw_store_ts)
-    replace!(log_gw, -Inf=>0.0, Inf=>0.0)
-    mw = MovingWindow(window, Float64)
-    o = Quantile(quantiles, b=1000)
-    thresholds = [value(fit!(o, i)) for i in log_gw]
-    plot(CALIB_DATES, log_gw, label="", title="$app GW Store", legend=:topright)
-    plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    savefig(joinpath(baseline_path, "baseline_calib_loggw_store_$(app).png"))
+    # log_gw = log.(gw_store_ts)
+    # replace!(log_gw, -Inf=>0.0, Inf=>0.0)
+    # mw = MovingWindow(window, Float64)
+    # o = Quantile(quantiles, b=1000)
+    # thresholds = [value(fit!(o, i)) for i in log_gw]
+    # plot(CALIB_DATES, log_gw, label="", title="$app GW Store", legend=:topright)
+    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
+    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
+    # savefig(joinpath(baseline_path, "baseline_calib_loggw_store_$(app).png"))
 
     @info "CMD" app minimum(node.storage[2:end]) maximum(node.storage[2:end])
     @info "GW Store" app minimum(node.gw_store[2:end]) maximum(node.gw_store[2:end])
@@ -126,17 +123,17 @@ for app in APPROACHES
     @info "$app validation: "
     report_metrics(VALID_OBS, valid_outflow)
 
-    plot(VALID_DATES, VALID_OBS, label="Historic", title="$app Validation\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
+    plot(VALID_DATES, VALID_OBS, label="Historic", title="$display_name Validation\n(RMSE: $rmse; NSE: $nse; KGE': $mkge)", legend=:topright)
     plot!(VALID_DATES, valid_outflow, label="Simulated", alpha=0.7, ylabel="Stream flow [ML]")
     savefig(joinpath(baseline_path, "baseline_valid_perf_$(app).png"))
 
-    qqplot(VALID_OBS, valid_outflow, title="Validation Period\n$app")
+    qqplot(VALID_OBS, valid_outflow, title="Validation Period\n$display_name")
     xlabel!("Historic")
     ylabel!("Simulated")
     savefig(joinpath(baseline_path, "baseline_valid_perf_qq_$(app).png"))
 
     full_dates = vcat(CALIB_DATES, VALID_DATES)
-    plot(full_dates[calib_start:CALIB_LN], CALIB_OBS[calib_start:end], label="Calibration", title="$app C&V", legend=:topright)
+    plot(full_dates[calib_start:CALIB_LN], CALIB_OBS[calib_start:end], label="Calibration", title="$display_name C&V", legend=:topright)
     plot!(full_dates[CALIB_LN+1:end], VALID_OBS, label="Validation", color="green")
     plot!(full_dates[calib_start:end], node.outflow[calib_start:end], label="Simulated", linestyle=:dashdot, color="red", alpha=0.7, ylabel="Stream flow [ML]")
     savefig(joinpath(baseline_path, "baseline_full_perf_$(app).png"))

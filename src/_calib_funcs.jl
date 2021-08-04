@@ -452,7 +452,7 @@ function bin_metric(active_param_set, param_idxs, obs, sim, metric, agg_func)
                 push!(sub_scores, tmp)
             end
         else
-            push!(sub_scores, 0.0)
+            push!(sub_scores, 9999.8)
         end
     end
 

@@ -33,7 +33,7 @@ mkpath(calib_param_path)
 
     # Use baseline calibration parameters as the base
     target_idx = (1,2,5,6,7,8)
-    thresholds = [0.0, 0.1, 0.90]
+    thresholds = [0.0, 0.1, 0.9]
     popsize = 64 * length(target_idx)^2
     state = :storage
     state_str = String(state)
@@ -52,7 +52,7 @@ mkpath(calib_param_path)
 
     # Save params
     params = best_candidate(result)
-    outfile = "$(calib_param_path)restricted_log_$(state_str)_$(approach)_10_year.txt"
+    outfile = "$(calib_param_path)log_$(state_str)_$(approach)_10_year.txt"
     open(outfile, "w") do f
         print(f, join(params, ","))
     end
@@ -74,39 +74,39 @@ mkpath(calib_param_path)
     calib_sim = sim_flow[calib_start:CALIB_LN]
     rmse = round(Streamfall.RMSE(calib_data, calib_sim), digits=2)
     nse = round(Streamfall.NSE(calib_data, calib_sim), digits=2)
-    kge = round(Streamfall.KGE(calib_data, calib_sim), digits=2)
+    mkge = round(Streamfall.mKGE(calib_data, calib_sim), digits=2)
     plot(FULL_DATASET.Date[calib_start:CALIB_LN], calib_data,
-         title="$approach\n(RMSE: $rmse; NSE: $nse; KGE: $kge)",
+         title="$approach\n(KGE': $mkge; NSE: $nse; RMSE: $rmse)",
          legend=:topright,
          label="Historic",
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(CALIB_DATES[calib_start:end], calib_sim, label="Calibration", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "restricted_log_$(state_str)_$(approach)_10_year_calibration.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_calib.png"))
 
-    qqplot(calib_data, calib_sim, title="4-parameter log Calibration\n($(state_str); $approach)")
+    qqplot(calib_data, calib_sim, title="QQ Calibration\n($(state_str); $approach)")
     xlabel!("Historic")
     ylabel!("Simulated")
-    savefig(joinpath(calib_fig_path, "restricted_log_$(state_str)_$(approach)_10_year_qq_calib.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_qq_calib.png"))
 
     valid_data = FULL_DATASET[CALIB_LN+1:end, "410730_Q"]
     valid_sim = sim_flow[CALIB_LN+1:end]
     rmse = round(Streamfall.RMSE(valid_data, valid_sim), digits=2)
     nse = round(Streamfall.NSE(valid_data, valid_sim), digits=2)
-    kge = round(Streamfall.KGE(valid_data, valid_sim), digits=2)
+    mkge = round(Streamfall.mKGE(valid_data, valid_sim), digits=2)
     plot(FULL_DATASET.Date[CALIB_LN+1:end], valid_data,
-         title="$approach\n(RMSE: $rmse; NSE: $nse; KGE: $kge)",
+         title="$approach\n(KGE': $mkge; NSE: $nse; RMSE: $rmse)",
          legend=:topleft,
          label="Historic",
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(VALID_DATES, valid_sim, label="Validation", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "restricted_log_$(state_str)_$(approach)_10_year_validation.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_valid.png"))
 
-    qqplot(valid_data, valid_sim, title="4-parameter log Validation\n($(state_str); $approach)")
+    qqplot(valid_data, valid_sim, title="QQ Validation\n($(state_str); $approach)")
     xlabel!("Historic")
     ylabel!("Simulated")
-    savefig(joinpath(calib_fig_path, "restricted_log_$(state_str)_$(approach)_10_year_qq_valid.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_qq_valid.png"))
 end
 
 

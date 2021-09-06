@@ -1,8 +1,14 @@
 IHACRES State-based Ensemble - Cotter
 
+[![DOI](https://zenodo.org/badge/388680035.svg)](https://zenodo.org/badge/latestdoi/388680035)
+
+
 Code and analyses for investigations into a state-based IHACRES ensemble modeling approach featuring time-varying parameter sets.
 
 Written for Julia v1.5.3 using [Streamfall.jl](https://github.com/ConnectedSystems/Streamfall.jl) and [ihacres_nim](https://github.com/ConnectedSystems/ihacres_nim)
+
+---
+
 
 
 ## Overview of files in `src` directory

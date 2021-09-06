@@ -22,7 +22,7 @@ mkpath(calib_param_path)
     wid = Distributed.myid()
     @info "Worker $wid : Calibrating $approach"
 
-    calib_start = 1826  # 5-year burn in
+    calib_start = (1825*2)+1  # 10-year burn in
     sn, n_id = setup_network("$(baseline_calib)cotter_baseline_IHACRES_$approach.yml")
     func = nothing
     if !occursin("RMSE", approach)
@@ -32,23 +32,29 @@ mkpath(calib_param_path)
     end
 
     # Use baseline calibration parameters as the base
-    # Varying just 2 parameters
-    target_idx = (5,6,7,8)
-    thresholds = [0.0, 0.99]
+    target_idx = (1,2,4,5,6,7,8)
+    thresholds = [0.0, 0.1, 0.9]
+    # thresholds = [0.0, 0.16, 0.84]
     popsize = 64 * length(target_idx)^2
-    state = :gw_store
+    state = :storage
     state_str = String(state)
 
-    # Target top end only
-    metric = (active_param_set, param_idxs, obs, sim) -> targeted_threshold_metric(active_param_set[calib_start:end], param_idxs, obs[calib_start:end], sim[calib_start:end], func, 1)
+    # Calibrate network using the BlackBoxOptim package
+    # keyword arguments will be passed to the `bboptimize()` function
+    # This will set node parameters to the optimal values found
+    metric = (active_param_set, param_idxs, obs, sim) -> bin_metric(active_param_set[calib_start:CALIB_LN], param_idxs, obs[calib_start:CALIB_LN], sim[calib_start:CALIB_LN], func, nothing)
     result, optobj = burn_state_based_calibrate(sn, n_id, state, CALIB_CLIMATE, CALIB_FLOW, metric,
                                                 target_idx, thresholds;
+                                                burn_in=calib_start,
                                                 log_transform=true,
+                                                Method=:borg_moea,
+                                                # ϵ=0.025,
+                                                FitnessScheme=ParetoFitnessScheme{length(thresholds)}(is_minimizing=true),
                                                 PopulationSize=popsize, MaxTime=TRAINING_TIME, TraceInterval=300)
 
     # Save params
     params = best_candidate(result)
-    outfile = "$(calib_param_path)calib_params_online_target_low-end_$(state_str)_$(approach).txt"
+    outfile = "$(calib_param_path)log_$(state_str)_$(approach)_10_year.txt"
     open(outfile, "w") do f
         print(f, join(params, ","))
     end
@@ -61,7 +67,7 @@ mkpath(calib_param_path)
     node = sn[n_id]
     _, x0, __ = param_info(node; with_level=false)
     mod_params = update_partial(x0, target_idx, params)
-    active_param_set, param_idxs = online_burn_state_node!(sn, n_id, FULL_CLIMATE, state, mod_params, thresholds; log_transform=true, releases=nothing)
+    active_param_set, param_idxs = online_burn_state_node!(sn, n_id, FULL_CLIMATE, state, mod_params, thresholds; burn_in=calib_start, log_transform=true, releases=nothing)
 
     sim_flow = node.outflow
     @assert best_score == metric(active_param_set[1:CALIB_LN], param_idxs, CALIB_OBS[1:CALIB_LN], sim_flow[1:CALIB_LN])
@@ -70,40 +76,42 @@ mkpath(calib_param_path)
     calib_sim = sim_flow[calib_start:CALIB_LN]
     rmse = round(Streamfall.RMSE(calib_data, calib_sim), digits=2)
     nse = round(Streamfall.NSE(calib_data, calib_sim), digits=2)
-    kge = round(Streamfall.KGE(calib_data, calib_sim), digits=2)
+    mkge = round(Streamfall.mKGE(calib_data, calib_sim), digits=2)
     plot(FULL_DATASET.Date[calib_start:CALIB_LN], calib_data,
-         title="$approach\n(RMSE: $rmse; NSE: $nse; KGE: $kge)",
+         title="$approach\n(KGE': $mkge; NSE: $nse; RMSE: $rmse)",
          legend=:topright,
          label="Historic",
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(CALIB_DATES[calib_start:end], calib_sim, label="Calibration", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "target_low-end_$(state_str)_$(approach)_calibration.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_calib.png"))
 
-    qqplot(calib_data, calib_sim, title="Target Low End Calibration\n($(state_str); $approach)")
+    qqplot(calib_data, calib_sim, title="QQ Calibration\n($(state_str); $approach)")
     xlabel!("Historic")
     ylabel!("Simulated")
-    savefig(joinpath(calib_fig_path, "target_low-end_$(state_str)_$(approach)_qq_calib.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_qq_calib.png"))
 
     valid_data = FULL_DATASET[CALIB_LN+1:end, "410730_Q"]
     valid_sim = sim_flow[CALIB_LN+1:end]
     rmse = round(Streamfall.RMSE(valid_data, valid_sim), digits=2)
     nse = round(Streamfall.NSE(valid_data, valid_sim), digits=2)
-    kge = round(Streamfall.KGE(valid_data, valid_sim), digits=2)
+    mkge = round(Streamfall.mKGE(valid_data, valid_sim), digits=2)
     plot(FULL_DATASET.Date[CALIB_LN+1:end], valid_data,
-         title="$approach\n(RMSE: $rmse; NSE: $nse; KGE: $kge)",
+         title="$approach\n(KGE': $mkge; NSE: $nse; RMSE: $rmse)",
          legend=:topleft,
          label="Historic",
          xlabel="Date",
          ylabel="Streamflow [ML]")
     plot!(VALID_DATES, valid_sim, label="Validation", alpha=0.7)
-    savefig(joinpath(calib_fig_path, "target_low-end$(state_str)_$(approach)_validation.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_valid.png"))
 
-    qqplot(valid_data, valid_sim, title="Target Low End Validation\n($(state_str); $approach)")
+    qqplot(valid_data, valid_sim, title="QQ Validation\n($(state_str); $approach)")
     xlabel!("Historic")
     ylabel!("Simulated")
-    savefig(joinpath(calib_fig_path, "target_low-end_$(state_str)_$(approach)_qq_valid.png"))
+    savefig(joinpath(calib_fig_path, "log_$(state_str)_$(approach)_10_year_qq_valid.png"))
 end
 
 
 pmap(run_state_calibration, zip(APPROACHES, OBJFUNCS))
+
+@info "Finished"

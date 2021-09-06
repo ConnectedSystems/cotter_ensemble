@@ -1,3 +1,7 @@
+"""
+Load/setup common configurations, variables, helper functions and packages.
+"""
+
 using DataFrames, Query, Dates, CSV, YAML
 using Statistics, Distributions
 using Plots, StatsPlots
@@ -61,19 +65,19 @@ FULL_CLIMATE = Climate(FULL_DATASET, "_P", "_PET")
 CALIB_DATES = FULL_DATASET[1:CALIB_LN, "Date"]
 VALID_DATES = FULL_DATASET[CALIB_LN+1:end, "Date"]
 
-APPROACHES = ["NNSE", "NmKGE", "RMSE", "mean_NmKGE", "NnpKGE",
-              "split_NNSE", "split_NmKGE", "split_RMSE", "split_mean_NmKGE", "split_NnpKGE"]
+APPROACHES = ["NNSE", "NmKGE", "mean_NmKGE", "NnpKGE",  # "RMSE", 
+              "split_NNSE", "split_NmKGE", "split_mean_NmKGE", "split_NnpKGE"]  # "split_RMSE", 
 
 split_NNSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NNSE)
 split_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NmKGE)
-split_RMSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.RMSE)
+# split_RMSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.RMSE)
 split_mean_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.mean_NmKGE)
 split_NnpKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NnpKGE)
 
 OBJFUNCS = [
-    Streamfall.NNSE, Streamfall.NmKGE, Streamfall.RMSE, Streamfall.mean_NmKGE,
+    Streamfall.NNSE, Streamfall.NmKGE, Streamfall.mean_NmKGE,  # , Streamfall.RMSE
     Streamfall.NnpKGE,
-    split_NNSE, split_NmKGE, split_RMSE, split_mean_NmKGE,
+    split_NNSE, split_NmKGE, split_mean_NmKGE,  # split_RMSE
     split_NnpKGE
 ]
 

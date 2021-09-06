@@ -67,43 +67,6 @@ for app in APPROACHES
     ylabel!("Simulated")
     savefig(joinpath(baseline_path, "baseline_calib_perf_qq_$(display_name).png"))
 
-    # cmd = node.storage[2:CALIB_LN+1]
-    # mw = MovingWindow(window, Float64)
-    # o = Quantile(quantiles, b=1000)
-    # ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in cmd]
-    # thresholds = [value(fit!(o, i)) for i in ma]
-    # plot(CALIB_DATES, cmd, label="CMD", title="$app CMD", legend=:topright)
-    # plot!(CALIB_DATES, ma, label="MA Simulated", alpha=0.7, ylabel="CMD")
-    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # savefig(joinpath(baseline_path, "baseline_calib_cmd_$(app).png"))
-
-    # logcmd = log.(cmd)
-    # replace!(logcmd, -Inf=>0.0, Inf=>0.0)
-    # o = Quantile(quantiles, b=1000)
-    # ma = [value(fit!(Mean(weight = ExponentialWeight(.01)), value(fit!(mw, i)))) for i in logcmd]
-    # thresholds = [value(fit!(o, i)) for i in ma]
-    # plot(CALIB_DATES, logcmd, label="Log CMD", title="$app Log CMD", legend=:topright)
-    # plot!(CALIB_DATES, ma, label="MA Log CMD", legend=:topright)
-    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # savefig(joinpath(baseline_path, "baseline_calib_logcmd_$(app).png"))
-
-    # gw_store_ts = gw_store
-
-    # log_gw = log.(gw_store_ts)
-    # replace!(log_gw, -Inf=>0.0, Inf=>0.0)
-    # mw = MovingWindow(window, Float64)
-    # o = Quantile(quantiles, b=1000)
-    # thresholds = [value(fit!(o, i)) for i in log_gw]
-    # plot(CALIB_DATES, log_gw, label="", title="$app GW Store", legend=:topright)
-    # plot!(CALIB_DATES, [i[1] for i in thresholds]; color="orange", linewidth=1.5, label="State bounds")
-    # plot!(CALIB_DATES, [i[2] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # # plot!(CALIB_DATES, [i[3] for i in thresholds]; color="orange", linewidth=1.5, label="")
-    # savefig(joinpath(baseline_path, "baseline_calib_loggw_store_$(app).png"))
-
     @info "CMD" app minimum(node.storage[2:end]) maximum(node.storage[2:end])
     @info "GW Store" app minimum(node.gw_store[2:end]) maximum(node.gw_store[2:end])
     @info "Quick" app minimum(node.quick_store[2:end]) maximum(node.quick_store[2:end])

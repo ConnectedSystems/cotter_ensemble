@@ -5,6 +5,7 @@ import Streamfall: run_node!
 
 using Infiltrator
 
+
 """
 Update base parameter values with a partial list of new values by index.
 
@@ -32,8 +33,7 @@ function update_partial(base_params, target_idx, updated_params)
 end
 
 
-"""Runs node online, determining state thresholds around 
-quantiles instead of mean.
+"""Runs node online, determining state thresholds around quantiles.
 """
 function run_online_node!(sn, v_id, climate, params, quantiles; releases=nothing)
     node = sn[v_id]
@@ -45,7 +45,7 @@ function run_online_node!(sn, v_id, climate, params, quantiles; releases=nothing
     timesteps = sim_length(climate)
     active_param_set = zeros(Int, timesteps)
 
-    o = Quantile(quantiles, b=1000)
+    o = Quantile(quantiles, b=2000)
     param_idxs = nothing
     for ts in (1:timesteps)
         cmd = node.storage[ts]
@@ -70,113 +70,6 @@ function run_online_node!(sn, v_id, climate, params, quantiles; releases=nothing
 end
 
 
-"""Same as run_node! except determine thresholds on the fly ("online")
-
-- offsets : vector of offsets from mean to calculate thresholds. Will always include maximum. 
-            Will resolve to [μ + (offset * std)..., max]
-"""
-function rainfall_online_node!(sn, v_id, climate, params, thresholds; releases=nothing)
-    node = sn[v_id]
-
-    # Get node parameters
-    _, x0, __ = param_info(node; with_level=false)
-    num_params = length(x0)
-
-    timesteps = sim_length(climate)
-    active_param_set = zeros(Int, timesteps)
-
-    param_idxs = nothing
-    for ts in (1:timesteps)
-        # Update param set based on state
-        P, _ = climate_values(node, climate, ts)
-
-        param_set_id, node_params, param_idxs = find_state_vars(P, thresholds, params, num_params, length(thresholds))
-        if (ts == 1) || (param_set_id != active_param_set[ts-1])
-            update_params!(node, node_params...)
-        end
-
-        # record timestep in which this param was active
-        active_param_set[ts] = param_set_id
-
-        Streamfall.run_node!(sn, v_id, climate, ts; extraction=releases)
-    end
-
-    return active_param_set, param_idxs
-end
-
-
-
-function rainfall_obj_func(x, base_params, climate, sn, v_id, calib_data, metric, target_idx, thresholds)
-    param_idxs = nothing
-    active_param_set = nothing
-    extraction = nothing
-
-    # Update base parameter values with given updated values
-    mod_params = update_partial(base_params, target_idx, x)
-
-    try
-        active_param_set, param_idxs = rainfall_online_node!(sn, v_id, climate, mod_params, thresholds; releases=extraction)
-    catch err
-        if err isa AssertionError
-            return 9999.0
-        end
-
-        throw(err)
-    end
-
-    node = sn[v_id]
-    node_data = node.outflow
-    h_data = calib_data[node.name]
-
-    # Calculate score
-    score = metric(active_param_set, param_idxs, h_data, node_data)
-
-    # reset to clear stored values
-    Streamfall.reset!(node)
-
-    return score
-end
-
-
-"""Calibration with online statistics with thresholds based around specified standard deviation offsets.
-
-Generalized to handle any one state variable.
-"""
-function rainfall_state_based_calibrate(sn, v_id, climate, calib_data, metric, target_idx, thresholds; kwargs...)
-
-    # Set defaults as necessary
-    defaults = (;
-        MaxTime=CALIB_TIME,
-        TraceInterval=300.0,
-        PopulationSize=125
-    )
-    kwargs = merge(defaults, kwargs)
-
-    node = sn[v_id]
-
-    # Get node parameters
-    _, x0, param_bounds = param_info(node; with_level=false)
-    param_bounds = [param_bounds[i] for i in target_idx]  # subset bounds array
-
-    # Create new optimization function
-    opt_func = x -> rainfall_obj_func(x, x0, climate, sn, v_id, calib_data, metric, target_idx, thresholds)
-
-    # Set up parameters for each CMD state
-    n_states = length(thresholds)  # lower, center, upper
-    param_bounds = repeat(param_bounds, n_states)
-    opt = bbsetup(opt_func; SearchRange=param_bounds,
-                  kwargs...)
-
-    res = bboptimize(opt)
-
-    bs = best_candidate(res)
-    @info "Calibrated $(v_id) ($(node.name)), with score: $(best_fitness(res))"
-    @info "Best Params:" collect(bs)
-
-    return res, opt
-end
-
-
 """Generic run_node method that handles any single state variable.
 
 Log-transforms the state value.
@@ -198,7 +91,7 @@ function online_state_node!(sn, v_id, climate, state, params, quantiles; release
         state_var = tmp_climate[:, "410730_P"]
     end
 
-    o = Quantile(quantiles, b=1000)
+    o = Quantile(quantiles, b=2000)
     param_idxs = nothing
     for ts in (1:timesteps)
         # Update param set based on state
@@ -316,14 +209,13 @@ function online_burn_state_node!(sn, v_id, climate, state, params, quantiles; bu
     if state != :rainfall
         state_var = getfield(node, state)
     else
-        tmp_climate = Streamfall.subcatchment_data(node, climate)
         # hard coded, I know :(
-        state_var = tmp_climate[:, "410730_P"]
+        state_var = Streamfall.subcatchment_data(node, climate)[:, "410730_P"]
         # TODO: Change over when ready
         # state_var = Streamfall.rainfall_data(node, climate)
     end
 
-    o = Quantile(quantiles, b=1000)
+    o = Quantile(quantiles, b=2000)
     param_idxs = nothing
     thresholds = nothing
     for ts in (1:timesteps)

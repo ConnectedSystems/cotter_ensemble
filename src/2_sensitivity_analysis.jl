@@ -39,7 +39,7 @@ for (app, metric) in zip(APPROACHES, OBJFUNCS)
     sobol_results = gsa(sa_runner, Sobol(), p_bounds, N=N)
 
     headers = "$app Parameter, ST, S1, Threshold"
-    res_lines = zip(p_names, sobol_results.ST, sobol_results.S1, repeat([0.4], length(p_names)))
+    res_lines = zip(p_names, sobol_results.ST, sobol_results.S1, repeat([0.04], length(p_names)))
     outfile = "$(DATA_PATH)sa_results_w_dummy.csv"
 
     open(outfile, "a+") do f

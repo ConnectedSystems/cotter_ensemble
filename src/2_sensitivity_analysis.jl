@@ -19,22 +19,11 @@ function run_sa(X; node, metric)
 end
 
 
-N = 8192
-approaches = ["NNSE", "NmKGE", "RMSE", "mean_NmKGE", "NnpKGE", "split_NNSE", "split_NmKGE", "split_RMSE", "split_mean_NmKGE", "split_NnpKGE"]
+N = 16384
 
-split_NNSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NNSE)
-split_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NmKGE)
-split_RMSE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.RMSE)
-split_mean_NmKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.mean_NmKGE)
-split_mean_NnpKGE = (obs, sim) -> Streamfall.naive_split_metric(obs, sim; metric=Streamfall.NnpKGE)
-
-metrics = [
-    Streamfall.NNSE, Streamfall.NmKGE, Streamfall.RMSE, Streamfall.mean_NmKGE, Streamfall.NnpKGE,
-    split_NNSE, split_NmKGE, split_RMSE, split_mean_NmKGE, split_mean_NnpKGE
-]
-
-for (app, metric) in zip(approaches, metrics)
-    sn, n_id = setup_network(joinpath(DATA_PATH, "cotter_baseline_calibrated_$(app).yml"))
+for (app, metric) in zip(APPROACHES, OBJFUNCS)
+    # sn, n_id = setup_network(joinpath(DATA_PATH, "cotter_baseline_calibrated_$(app).yml"))
+    sn, n_id = setup_network(joinpath(DATA_PATH, "410730_IHACRES.yml"))
     node = sn[n_id]
 
     p_names, ini_vals, p_bounds = param_info(node; with_level=false)
@@ -50,7 +39,7 @@ for (app, metric) in zip(approaches, metrics)
     sobol_results = gsa(sa_runner, Sobol(), p_bounds, N=N)
 
     headers = "$app Parameter, ST, S1, Threshold"
-    res_lines = zip(p_names, sobol_results.ST, sobol_results.S1, repeat([0.4], length(p_names)))
+    res_lines = zip(p_names, sobol_results.ST, sobol_results.S1, repeat([0.04], length(p_names)))
     outfile = "$(DATA_PATH)sa_results_w_dummy.csv"
 
     open(outfile, "a+") do f

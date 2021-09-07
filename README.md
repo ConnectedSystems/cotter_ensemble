@@ -5,7 +5,26 @@ IHACRES State-based Ensemble - Cotter
 
 Code and analyses for investigations into a state-based IHACRES ensemble modeling approach featuring time-varying parameter sets.
 
-Written for Julia v1.5.3 using [Streamfall.jl](https://github.com/ConnectedSystems/Streamfall.jl) and [ihacres_nim](https://github.com/ConnectedSystems/ihacres_nim)
+Written for Julia v1.5.3 using [Streamfall.jl](https://github.com/ConnectedSystems/Streamfall.jl) (v0.19) and [ihacres_nim](https://github.com/ConnectedSystems/ihacres_nim) (v0.4)
+
+All instructions below is run from the `src` directory.
+
+To start:
+
+```bash
+# Install necessary packages
+$ julia --project=..
+julia> instantiate
+```
+
+Run files in order:
+
+```bash
+$ julia --project=..
+julia> include("1_analyze_data.jl")
+julia> include("2_sensitivity_analysis.jl")
+# ... etc ...
+```
 
 ---
 
